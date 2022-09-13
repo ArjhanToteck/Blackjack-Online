@@ -10,18 +10,24 @@ function Player(name, game, host = false) {
 	this.name = name.replace(/[\u00A0-\u9999<>\&]/gim, i => {
 		return '&#' + i.charCodeAt(0) + ';'
 	}); // removes HTML from name
-	this.game = game;
-	this.ips = [];
-	this.host = host;
-
 	// generates random password for player
 	this.password = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
 
 	// connections
 	this.connections = [];
 
+	this.game = game;
+	this.ips = [];
+	this.host = host;
+	this.bot = false;
+
+	this.gameData = new Game.PlayerGameData();
+	this.wins = 0;
+	this.losses = 0;
+
 	this.chatSendPermission = "everyone";
-	this.chatViewPermissions = [{
+	this.chatViewPermissions = [
+		{
 			name: "everyone", // public messages, where most chat happens
 			start: new Date(0), // early date to see messages sent before joining
 			end: null
@@ -50,7 +56,7 @@ function Player(name, game, host = false) {
 			for (let i = 0; i < this.connections.length; i++) {
 				this.connections[i].sendUTF(JSON.stringify({
 					action: "gameClosed",
-					message: `You left the game. ${this.game.gameEnded ? `Thank you for playing.` : `Use the code "${this.game.code}" if you want to join back in.`}`
+					message: `You left the game. ${this.game.gameEnded ? `Thank you for playing.` : `Use the code "${this.game.code}" if you want to join back.`}`
 				}));
 			}
 
@@ -130,6 +136,7 @@ function Player(name, game, host = false) {
 				player.leaveGame();
 			}
 		},
+
 		// sends message
 		function(message, player) {
 			if (message.action == "sendMessage" && !!message.message) {
@@ -142,7 +149,7 @@ function Player(name, game, host = false) {
 							return '&#' + i.charCodeAt(0) + ';'
 						}), // removes html from message
 						date: new Date(),
-						permission: "everyone"
+						permission: player.chatSendPermission
 					}]
 				};
 
@@ -154,6 +161,8 @@ function Player(name, game, host = false) {
 		// global commands
 		function(message, player) {
 			if (message.action == "sendMessage" && !!message.message) {
+				// complicated commands with parameters use if statements
+
 				// !ban command
 				if (message.message.substring(0, 5) == "!ban ") {
 					// checks if game started
@@ -204,6 +213,22 @@ function Player(name, game, host = false) {
 								return;
 							}
 
+							// banning a bot
+							if (target.bot) {
+								player.game.sendMessage({
+									action: "recieveMessage",
+									messages: [{
+										sender: "Moderator",
+										message: `Use <c>!bot remove</c> if you want to remove a bot.`,
+										date: new Date(),
+										permission: "everyone"
+									}]
+								});
+
+								// exits function
+								return;
+							}
+
 							// valid target
 
 							// warns player
@@ -244,7 +269,7 @@ function Player(name, game, host = false) {
 										target.kick(true);
 									}
 
-									// event listener self destructs
+									// event listener self destructs (even if not confirmed)
 									player.onMessageEvents.splice(index, 1);
 								}
 							})
@@ -323,6 +348,22 @@ function Player(name, game, host = false) {
 								return;
 							}
 
+							// kicking a bot
+							if (target.bot) {
+								player.game.sendMessage({
+									action: "recieveMessage",
+									messages: [{
+										sender: "Moderator",
+										message: `Use <c>!bot remove</c> if you want to remove a bot.`,
+										date: new Date(),
+										permission: "everyone"
+									}]
+								});
+
+								// exits function
+								return;
+							}
+
 							// valid target
 
 							// warns player
@@ -391,9 +432,223 @@ function Player(name, game, host = false) {
 					}
 				}
 
+				// commands without parameters use switch statement
 				switch (message.message) {
+					// !bot add command
+					case "!bot add": {
+						// checks if in game
+						if (player.game.inGame) {
+							// bots can't be added in game
+							player.game.sendMessage({
+								action: "recieveMessage",
+								messages: [{
+									sender: "Moderator",
+									message: "You can't add a bot in the middle of a game.",
+									date: new Date(),
+									permission: "everyone"
+								}]
+							});
+						} else {
+							// sends message adding bot
+							player.game.sendMessage({
+								action: "recieveMessage",
+								messages: [{
+									sender: "Moderator",
+									date: new Date(),
+									message: `${play.game.addBot().name} has been added to the game. Use <c>!bot remove<c> at any time to kick them out.`, // getting the name of a new bot adds the bot to the game
+									permission: "everyone"
+								}]
+							});
+						}
+						break;
+					}
+
+					// !bot remove command
+					case "!bot remove": {
+						// checks if in game
+						if (player.game.inGame) {
+							// bots can't be removed in game
+							player.game.sendMessage({
+								action: "recieveMessage",
+								messages: [{
+									sender: "Moderator",
+									message: "Wait till after this game, buddy.",
+									date: new Date(),
+									permission: "everyone"
+								}]
+							});
+						} else {
+							// removes bot from game (messages to player are sent by this function)
+							player.game.removeBot();
+						}
+						break;
+
+					}
+
+					// !hand command
+					case "!hand": {
+						// makes sure in game
+						if (!player.game.inGame) {
+							return;
+						}
+
+						// makes sure player is still in game
+						if (player.gameData.bust) {
+							return;
+						}
+
+						// stores names of cards
+						let cardsString = "";
+
+						// gets value of hand
+						let minValue = 0;
+						let maxValue = 0;
+
+						// adds min and max values of all cards
+						for (let i = 0; i < player.cards.length; i++) {
+							// min and max value of regular card is added
+							minValue += player.cards[i].minValue;
+							maxValue += player.cards[i].maxValue;
+
+							cardsString += player.cards[i].toString();
+
+							// adds comma if not last card
+							if (i < player.cards.length - 1) cardsString += ", ";
+
+							// adds and if second to last card
+							if (i == player.cards.length - 2) cardsString += "and ";
+						}
+
+						// checks if maxValue is over 21
+						if (maxValue > 21) {
+							maxValue = minValue;
+						}
+
+						// tells player their hand
+						player.game.sendMessage({
+							action: "recieveMessage",
+							messages: [{
+								sender: "Moderator",
+								message: "Your hand: " + cardsString,
+								date: new Date().toString(),
+								permission: `user:${player.name}`
+							}]
+						});
+
+						// tells player total value
+						player.game.sendMessage({
+							action: "recieveMessage",
+							messages: [{
+								sender: "Moderator",
+								message: `The value of your hand is ${maxValue == minValue ? minValue : minValue + " or " + maxValue}.\nUse <c>!stand</c> If you are happy with this value or <c>!hit</c> if you want to risk receiving another card.`,
+								date: new Date().toString(),
+								permission: `user:${player.name}`
+							}]
+						});
+						break;
+					}
+
+					// !hit command
+					case "!hit": {
+						// makes sure in game
+						if (!player.game.inGame) {
+							return;
+						}
+
+						// makes sure player is still in game
+						if (player.gameData.bust) {
+							return;
+						}
+
+						// makes sure not standing
+						if (player.gameData.standing) {
+							player.game.sendMessage({
+								action: "recieveMessage",
+								messages: [{
+									sender: "Moderator",
+									message: "You already chose to stand and cannot get more cards.",
+									date: new Date(),
+									permission: "everyone"
+								}]
+							});
+
+							return;
+						}
+
+						// valid usage of command
+
+						// gets random card index
+						randomIndex = player.game.deck.getRandomCardIndex();
+
+						let cardName = player.game.deck.cards[randomIndex].toString();
+
+						// deals card to player
+						player.cards.push(player.game.deck.cards[randomIndex]);
+
+						// removes card from deck
+						player.game.deck.cards.splice(randomIndex, 1);
+
+						// tells player dealt card
+						player.game.sendMessage({
+							action: "recieveMessage",
+							messages: [{
+								sender: "Moderator",
+								message: "You were dealt a " + cardName,
+								date: new Date().toString(),
+								permission: `user:${player.name}`
+							}]
+						});
+
+						// gets value of hand
+						let minValue = 0;
+						let maxValue = 0;
+
+						// adds min and max values of all cards
+						for (let i = 0; i < player.cards.length; i++) {
+							// min and max value of regular card is added
+							minValue += player.cards[i].minValue;
+							maxValue += player.cards[i].maxValue;
+						}
+
+						// checks if maxValue is over 21
+						if (maxValue > 21) {
+							maxValue = minValue;
+						}
+
+						// tells player total value
+						player.game.sendMessage({
+							action: "recieveMessage",
+							messages: [{
+								sender: "Moderator",
+								message: `The value of your hand is ${maxValue == minValue ? minValue : minValue + " or " + maxValue}.\nUse <c>!stand</c> If you are happy with this value or <c>!hit</c> if you want to risk receiving another card.`,
+								date: new Date().toString(),
+								permission: `user:${player.name}`
+							}]
+						});
+
+						// checks for bust
+						if (minValue > 21) {
+							player.gameData.bust = true;
+
+							// tells player they bust
+							player.game.sendMessage({
+								action: "recieveMessage",
+								messages: [{
+									sender: "Moderator",
+									message: player.name + " has gone over 21 and bust.",
+									date: new Date().toString(),
+									permission: "everyone"
+								}]
+							});
+
+							player.game.checkIfOver();
+						}
+
+						break;
+					}
+
 					// !players command
-					case "!players":
+					case "!players": {
 						var playersList = [];
 
 						// gets list of player names
@@ -412,9 +667,82 @@ function Player(name, game, host = false) {
 							}]
 						});
 						break;
+					}
 
-						// !settings command
-					case "!settings":
+					// !players bust command
+					case "!players bust": {
+						var playersList = [];
+
+						// gets list of player names
+						for (let i = 0; i < player.game.players.length; i++) {
+							if (player.game.players[i].bust) playersList.push(player.game.players[i].name);
+						}
+
+						if (playersList.length == 0) {
+							// tells player nobody has bust
+							player.game.sendMessage({
+								action: "recieveMessage",
+								messages: [{
+									sender: "Moderator",
+									message: "Nobody has bust yet.",
+									date: new Date(),
+									permission: "everyone"
+								}]
+							});
+						} else {
+							// sends list of player names
+							player.game.sendMessage({
+								action: "recieveMessage",
+								messages: [{
+									sender: "Moderator",
+									message: `All players who bust: ${playersList.join(", ")}`,
+									date: new Date(),
+									permission: "everyone"
+								}]
+							});
+						}
+						
+						break;
+					}
+
+					// !players standing command
+					case "!players standing": {
+						var playersList = [];
+
+						// gets list of player names
+						for (let i = 0; i < player.game.players.length; i++) {
+							if (player.game.players[i].standing) playersList.push(player.game.players[i].name);
+						}
+
+						if (playersList.length == 0) {
+							// tells player nobody is standing
+							player.game.sendMessage({
+								action: "recieveMessage",
+								messages: [{
+									sender: "Moderator",
+									message: "Nobody is standing yet.",
+									date: new Date(),
+									permission: "everyone"
+								}]
+							});
+						} else {
+							// sends list of player names
+							player.game.sendMessage({
+								action: "recieveMessage",
+								messages: [{
+									sender: "Moderator",
+									message: `All standing players: ${playersList.join(", ")}`,
+									date: new Date(),
+									permission: "everyone"
+								}]
+							});
+						}
+						
+						break;
+					}
+
+					// !settings command
+					case "!settings": {
 						player.game.sendMessage({
 							action: "recieveMessage",
 							messages: [{
@@ -439,9 +767,10 @@ function Player(name, game, host = false) {
 						}
 
 						break;
+					}
 
-						// !settings allowPlayersToJoin command
-					case "!settings allowPlayersToJoin":
+					// !settings allowPlayersToJoin command
+					case "!settings allowPlayersToJoin": {
 						// checks if game started
 						if (player.game.inGame) {
 							return;
@@ -478,9 +807,10 @@ function Player(name, game, host = false) {
 						});
 
 						break;
+					}
 
-						// !settings public command
-					case "!settings public":
+					// !settings public command
+					case "!settings public": {
 						// checks if game started
 						if (player.game.inGame) {
 							return;
@@ -527,15 +857,93 @@ function Player(name, game, host = false) {
 
 						break;
 
-						// !start command
-					case "!start":
+					}
+
+					// !stand command
+					case "!stand": {
+						// makes sure in game
+						if (!player.game.inGame) {
+							return;
+						}
+
+						// makes sure player didn't bust
+						if (player.gameData.bust) {
+							return;
+						}
+
+						// makes sure not already standing
+						if (player.gameData.standing) {
+							player.game.sendMessage({
+								action: "recieveMessage",
+								messages: [{
+									sender: "Moderator",
+									message: "You are already standing.",
+									date: new Date(),
+									permission: "everyone"
+								}]
+							});
+
+							return;
+						}
+
+						// valid usage of command
+
+						// sets standing to true
+						player.gameData.standing = true;
+
+						// gets value of hand
+						let minValue = 0;
+						let maxValue = 0;
+
+						// adds min and max values of all cards
+						for (let i = 0; i < player.cards.length; i++) {
+							// min and max value of regular card is added
+							minValue += player.cards[i].minValue;
+							maxValue += player.cards[i].maxValue;
+						}
+
+						// checks if maxValue is over 21
+						if (maxValue > 21) {
+							maxValue = minValue;
+						}
+
+						// records value of hands while standing
+						player.gameData.standValue = maxValue;
+
+						player.game.sendMessage({
+							action: "recieveMessage",
+							messages: [{
+								sender: "Moderator",
+								message: "You are standing with a value of " + maxValue + ". Good luck.",
+								date: new Date(),
+								permission: `user:${player.name}`
+							}]
+						});
+
+						player.game.sendMessage({
+							action: "recieveMessage",
+							messages: [{
+								sender: "Moderator",
+								message: player.name + " is choosing to stand.",
+								date: new Date(),
+								permission: "everyone"
+							}]
+						});
+
+						player.game.checkIfOver();
+
+						break;
+					}
+
+					// !start command
+					case "!start": {
 						if (player.game.inGame == false) {
-							if (player.game.players.length < 5) {
+							if (player.game.players.length < 3) {
 								player.game.sendMessage({
 									action: "recieveMessage",
 									messages: [{
 										sender: "Moderator",
-										message: `You need at least 5 people to play the game. You currently only have ${player.game.players.length}. You can invite more people to join with the code "${player.game.code}".`,
+										message: `You need at least 3 people to play the game. You currently only have ${player.game.players.length}. You can invite more people to join with the code "${player.game.code}". If you're a loser and have no friends, use <c>!bot add</c> to add a bot player.`,
 										date: new Date(),
 										permission: "everyone"
 									}]
@@ -545,6 +953,7 @@ function Player(name, game, host = false) {
 							}
 						}
 						break;
+					}
 				}
 			}
 		}
