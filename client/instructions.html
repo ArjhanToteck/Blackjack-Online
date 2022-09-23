@@ -1,0 +1,64 @@
+<head>
+	<!-- Global site tag (gtag.js) - Google Analytics -->
+	<script async src="https://www.googletagmanager.com/gtag/js?id=G-68J35F2R6N"></script>
+	<script>
+		window.dataLayer = window.dataLayer || [];
+
+		function gtag() {
+			dataLayer.push(arguments);
+		}
+		gtag('js', new Date());
+
+		gtag('config', 'G-68J35F2R6N');
+	</script>
+
+	<title>Blackjack Instructions | ArjhanToteck</title>
+	<link rel="icon" href="/favicon.png">
+	<link href="/style.css" rel="stylesheet" type="text/css" media="all">
+</head>
+
+<h1 data-text="Instructions" class="glitch">Instructions</h1>
+
+<h2 data-text="Starting the Game" class="glitch">Starting the Game</h2>
+
+Games can be created by pressing the button labeled "Host Game" and entering the username you want. While the game has not started, anyone can join if they press "Join Game" in the menu, input the game code, and input their desired username.
+
+To start the game, there must be at least three players, and somebody must type the command <c>!start</c>.
+<br>
+If you want to play but can't get enough people you know to play, make the game public or add bots. Use the command <c>!settings public</c> to make the game code be shown in the menu screen to anyone playing. This can always be turned off by using the same command again. You could also add bots to play with <c>!bot add</c>, and remove it with <c>!bot remove</c> if you change your mind.
+
+<h2 data-text="The Actual Game" class="glitch">The Actual Game</h2>
+
+After using <c>!start</c>, the automated dealer, called the "Moderator," will give each player their hand. A player can then choose to <c>!hit</c> or <c>!stand</c> to hit or stand. Pretty simple. Bots wil automatically choose whether to hit or stand. If a player's hand is valued at over 21, they bust and lose the round.
+
+<br>
+<br>
+
+Once all players are standing or bust, the moderator will announce the player (or players, if tied) with the highest score. The game room will automatically close in 10 minutes afterwards, unless you choose to play again by using <c>!start</c> again.
+
+<h2 data-text="Commands" class="glitch">Commands</h2>
+
+Additional to the commands granted to you at night by your role (see above), you can type the global commands (shown below) in the chat to use them. Some commands have parameters. For example, the command <c>!vote (username)</c> has the parameter <c>username</c>. This parameter should be replaced with the username of a living player in the game. For example, <c>!vote ArjhanToteck</c> would vote for a player named "ArjhanToteck".
+
+<br>
+<br>
+
+<li>
+	<c>!players (type)</c>: when this command is sent in the chat, the moderator will respond with a list of players in the game. If the parameter <c>(type)</c> is equal to <c>standing</c>, the list will only include standing players. If it's equal to <c>bust</c>, the list will only include players who lost. If the message is sent as <c>!players</c> (without a parameter), the list will include all players.
+</li>
+<br>
+<li>
+	<c>!settings</c>: this command will show the current settings of the game.
+</li>
+<br>
+<li>
+	<c>!settings allowPlayersToJoin</c>: this command will toggle whether or not players are currently able to join the game. Cannot be changed once the game has started. Defaults to true.
+</li>
+<br>
+<li>
+	<c>!settings public</c>: this command will toggle whether or not the game is shown on the menu as a game that can be joined by anyone. Cannot be changed once the game has started. Defaults to false.
+</li>
+<br>
+<li>
+	<c>!start</c>: this command is used to start a new round.
+</li>
